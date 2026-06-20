@@ -1,6 +1,7 @@
 from pydantic import BaseModel, field_validator
 from typing import List, Optional
 from datetime import datetime
+from app.utils.ticker_normalizer import get_valid_ticker, VALID_TICKER_RE
 
 
 class UserRequest(BaseModel):
@@ -13,13 +14,13 @@ class UserRequest(BaseModel):
     def validate_tickers(cls, v: List[str]) -> List[str]:
         if len(v) < 1 or len(v) > 2:
             raise ValueError("Provide 1 or 2 stock tickers")
-        cleaned = []
+        normalized = []
         for t in v:
-            t = t.strip().upper()
-            if not t.isalpha() or len(t) > 10:
-                raise ValueError(f"Invalid ticker: {t}")
-            cleaned.append(t)
-        return cleaned
+            resolved = get_valid_ticker(t)
+            if not VALID_TICKER_RE.match(resolved):
+                raise ValueError(f"'{t}' could not be resolved to a valid ticker symbol")
+            normalized.append(resolved)
+        return normalized
 
 
 class AnalysisResponse(BaseModel):

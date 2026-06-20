@@ -12,7 +12,8 @@ class Stock(BaseModel):
     @field_validator("ticker")
     @classmethod
     def ticker_must_be_valid(cls, v: str) -> str:
+        from app.utils.ticker_normalizer import VALID_TICKER_RE
         v = v.strip().upper()
-        if not v.isalpha() or len(v) > 10:
+        if not VALID_TICKER_RE.match(v):
             raise ValueError(f"Invalid ticker symbol: {v}")
         return v
