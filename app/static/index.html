@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TradeAI — Stock Analysis Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d2e;
+      --card2: #232640;
+      --border: #2e3257;
+      --accent: #6366f1;
+      --accent2: #818cf8;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #eab308;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --radius: 12px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #1e2140 0%, #12142a 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 40px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    header .logo { font-size: 28px; }
+    header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    header h1 span { color: var(--accent2); }
+    header p { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Main layout ── */
+    main { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+
+    /* ── Search card ── */
+    .search-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      margin-bottom: 32px;
+    }
+    .search-card h2 { font-size: 16px; color: var(--muted); margin-bottom: 18px; text-transform: uppercase; letter-spacing: 1px; }
+    .input-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .ticker-input {
+      flex: 1; min-width: 140px; max-width: 200px;
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .ticker-input::placeholder { color: var(--muted); font-size: 14px; font-weight: 400; letter-spacing: 0; }
+    .ticker-input:focus { border-color: var(--accent); }
+    .btn-analyze {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 28px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s, transform .1s;
+      white-space: nowrap;
+    }
+    .btn-analyze:hover { background: var(--accent2); }
+    .btn-analyze:active { transform: scale(0.97); }
+    .btn-analyze:disabled { background: var(--card2); color: var(--muted); cursor: not-allowed; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 10px; }
+
+    /* ── Loader ── */
+    #loader {
+      display: none;
+      text-align: center;
+      padding: 60px 0;
+    }
+    .spinner {
+      width: 48px; height: 48px;
+      border: 4px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loader p { color: var(--muted); font-size: 14px; }
+
+    /* ── Error banner ── */
+    #error-box {
+      display: none;
+      background: #2d1515;
+      border: 1px solid #7f1d1d;
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      color: #fca5a5;
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+
+    /* ── Results ── */
+    #results { display: none; }
+
+    .meta-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .meta-bar h2 { font-size: 18px; font-weight: 700; }
+    .meta-bar span { font-size: 12px; color: var(--muted); }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
+
+    /* ── Ticker card ── */
+    .ticker-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .ticker-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ticker-name h3 { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+    .ticker-name p { font-size: 13px; color: var(--muted); margin-top: 3px; }
+    .rec-badge {
+      font-size: 13px; font-weight: 700;
+      padding: 6px 14px;
+      border-radius: 6px;
+      letter-spacing: 1px;
+    }
+    .rec-BUY  { background: #14532d; color: var(--green); }
+    .rec-HOLD { background: #422006; color: var(--yellow); }
+    .rec-SELL { background: #450a0a; color: var(--red); }
+
+    /* Score bar */
+    .score-section { padding: 16px 24px; border-bottom: 1px solid var(--border); }
+    .score-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
+    .score-bar-track { background: var(--card2); border-radius: 4px; height: 6px; overflow: hidden; margin-bottom: 10px; }
+    .score-bar-fill { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
+    .score-val { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+    .score-sent { background: linear-gradient(90deg, #06b6d4, #22c55e); }
+    .score-final { background: linear-gradient(90deg, var(--accent), var(--green)); }
+
+    /* Tabs */
+    .tabs { display: flex; border-bottom: 1px solid var(--border); }
+    .tab-btn {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--muted);
+      padding: 12px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color .2s, border-color .2s;
+    }
+    .tab-btn.active { color: var(--accent2); border-bottom-color: var(--accent2); }
+    .tab-btn:hover { color: var(--text); }
+
+    .tab-pane { display: none; padding: 20px 24px; }
+    .tab-pane.active { display: block; }
+
+    /* Rationale */
+    .rationale { font-size: 14px; line-height: 1.7; color: var(--text); margin-bottom: 16px; }
+    .bullet-list { list-style: none; }
+    .bullet-list li {
+      font-size: 13px; color: var(--muted); line-height: 1.6;
+      padding: 6px 0 6px 20px;
+      position: relative;
+      border-bottom: 1px solid var(--border);
+    }
+    .bullet-list li:last-child { border-bottom: none; }
+    .bullet-list li::before { content: "▸"; position: absolute; left: 0; color: var(--accent2); }
+    .risk-item::before { color: var(--red) !important; }
+    .up-item::before { color: var(--green) !important; }
+    .section-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin: 14px 0 6px; }
+
+    /* Metrics grid */
+    .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .metric-item { background: var(--card2); border-radius: 8px; padding: 10px 14px; }
+    .metric-item .m-label { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+    .metric-item .m-val { font-size: 16px; font-weight: 700; }
+
+    /* News list */
+    .news-item {
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .news-item:last-child { border-bottom: none; }
+    .news-title { font-size: 13px; font-weight: 600; color: var(--text); text-decoration: none; }
+    .news-title:hover { color: var(--accent2); }
+    .news-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .news-source { font-size: 11px; color: var(--muted); }
+    .sent-pill {
+      font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 4px;
+    }
+    .sent-positive { background: #14532d; color: var(--green); }
+    .sent-neutral  { background: #1c2333; color: var(--muted); }
+    .sent-negative { background: #450a0a; color: var(--red); }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 32px;
+      color: var(--muted);
+      font-size: 12px;
+      border-top: 1px solid var(--border);
+      margin-top: 60px;
+    }
+
+    @media (max-width: 600px) {
+      header { padding: 16px 20px; }
+      main { padding: 24px 16px; }
+      .metrics-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">📈</div>
+  <div>
+    <h1>Trade<span>AI</span></h1>
+    <p>Multi-agent stock analysis powered by Claude AI</p>
+  </div>
+</header>
+
+<main>
+  <!-- Search -->
+  <div class="search-card">
+    <h2>Analyze Stocks</h2>
+    <div class="input-row">
+      <input class="ticker-input" id="t1" type="text" placeholder="Stock 1 (e.g. AAPL)" />
+      <input class="ticker-input" id="t2" type="text" placeholder="Stock 2 (optional)" />
+      <button class="btn-analyze" id="btn">Analyze</button>
+    </div>
+    <p class="hint">Enter 1–2 stock ticker symbols. Analysis includes news sentiment, financial ratios, and an AI-generated recommendation.</p>
+  </div>
+
+  <!-- Error -->
+  <div id="error-box"></div>
+
+  <!-- Loader -->
+  <div id="loader">
+    <div class="spinner"></div>
+    <p id="loader-msg">Fetching financial data and news…</p>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <div class="meta-bar">
+      <h2 id="results-title">Analysis Results</h2>
+      <span id="results-time"></span>
+    </div>
+    <div class="grid" id="cards"></div>
+  </div>
+</main>
+
+<footer>TradeAI &mdash; For informational purposes only. Not financial advice.</footer>
+
+<script>
+const btn = document.getElementById('btn');
+const loader = document.getElementById('loader');
+const loaderMsg = document.getElementById('loader-msg');
+const errorBox = document.getElementById('error-box');
+const resultsDiv = document.getElementById('results');
+const cardsDiv = document.getElementById('cards');
+
+const LOADER_MSGS = [
+  'Fetching financial data and news…',
+  'Scoring news sentiment with Claude AI…',
+  'Computing valuation metrics…',
+  'Generating trading recommendations…',
+  'Building your dashboard…',
+];
+
+btn.addEventListener('click', runAnalysis);
+document.addEventListener('keydown', e => { if (e.key === 'Enter') runAnalysis(); });
+
+async function runAnalysis() {
+  const t1 = document.getElementById('t1').value.trim().toUpperCase();
+  const t2 = document.getElementById('t2').value.trim().toUpperCase();
+  const tickers = [t1, t2].filter(Boolean);
+
+  if (!tickers.length) { showError('Please enter at least one ticker symbol.'); return; }
+
+  hideError();
+  showLoader();
+  btn.disabled = true;
+
+  // Cycle loader messages
+  let mi = 0;
+  const msgInterval = setInterval(() => {
+    mi = (mi + 1) % LOADER_MSGS.length;
+    loaderMsg.textContent = LOADER_MSGS[mi];
+  }, 3000);
+
+  try {
+    const res = await fetch('/dashboard/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tickers }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Analysis failed');
+    renderResults(data);
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    clearInterval(msgInterval);
+    hideLoader();
+    btn.disabled = false;
+  }
+}
+
+function renderResults(data) {
+  cardsDiv.innerHTML = '';
+  document.getElementById('results-title').textContent = `Results for ${data.tickers.join(' & ')}`;
+  document.getElementById('results-time').textContent = 'Generated ' + new Date(data.generated_at).toLocaleTimeString();
+  resultsDiv.style.display = 'block';
+
+  for (const ticker of data.tickers) {
+    const rec = data.recommendations[ticker] || {};
+    const fm = data.financial_metrics[ticker] || {};
+    const news = data.news_summary[ticker] || [];
+    const metrics = fm.metrics || {};
+    const stock = fm.stock_info || {};
+    cardsDiv.appendChild(buildCard(ticker, rec, metrics, stock, news));
+  }
+}
+
+function buildCard(ticker, rec, metrics, stock, news) {
+  const el = document.createElement('div');
+  el.className = 'ticker-card';
+
+  const recommendation = rec.recommendation || '—';
+  const recClass = ['BUY','HOLD','SELL'].includes(recommendation) ? recommendation : 'HOLD';
+
+  el.innerHTML = `
+    <div class="ticker-header">
+      <div class="ticker-name">
+        <h3>${ticker}</h3>
+        <p>${stock.company_name || ''} ${stock.current_price ? '· $' + stock.current_price.toFixed(2) : ''}</p>
+      </div>
+      <span class="rec-badge rec-${recClass}">${recommendation}</span>
+    </div>
+
+    <div class="score-section">
+      <div class="score-label"><span>Valuation Score</span><span>${rec.valuation_score ?? '—'}/100</span></div>
+      <div class="score-bar-track"><div class="score-bar-fill score-val" style="width:${rec.valuation_score ?? 0}%"></div></div>
+
+      <div class="score-label"><span>Sentiment Score</span><span>${rec.sentiment_score ?? '—'}/100</span></div>
+      <div class="score-bar-track"><div class="score-bar-fill score-sent" style="width:${rec.sentiment_score ?? 0}%"></div></div>
+
+      <div class="score-label"><span>Final Score</span><span>${rec.final_score ?? '—'}/100</span></div>
+      <div class="score-bar-track"><div class="score-bar-fill score-final" style="width:${rec.final_score ?? 0}%"></div></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab(this,'analysis-${ticker}')">Analysis</button>
+      <button class="tab-btn" onclick="switchTab(this,'metrics-${ticker}')">Metrics</button>
+      <button class="tab-btn" onclick="switchTab(this,'news-${ticker}')">News (${news.length})</button>
+    </div>
+
+    <div class="tab-pane active" id="analysis-${ticker}">
+      <p class="rationale">${rec.rationale || 'No rationale available.'}</p>
+      ${renderBullets('Risks', rec.risks || [], 'risk-item')}
+      ${renderBullets('Upsides', rec.upsides || [], 'up-item')}
+    </div>
+
+    <div class="tab-pane" id="metrics-${ticker}">
+      <div class="metrics-grid">
+        ${renderMetric('P/E Ratio', metrics.pe_ratio)}
+        ${renderMetric('P/B Ratio', metrics.pb_ratio)}
+        ${renderMetric('EPS', metrics.eps)}
+        ${renderMetric('ROE', pct(metrics.roe))}
+        ${renderMetric('Profit Margin', pct(metrics.profit_margin))}
+        ${renderMetric('Revenue Growth', pct(metrics.revenue_growth))}
+        ${renderMetric('Debt / Equity', metrics.debt_to_equity)}
+        ${renderMetric('Current Ratio', metrics.current_ratio)}
+        ${renderMetric('Beta', metrics.beta)}
+        ${renderMetric('Dividend Yield', pct(metrics.dividend_yield))}
+        ${renderMetric('52W High', metrics.fifty_two_week_high ? '$'+metrics.fifty_two_week_high.toFixed(2) : null)}
+        ${renderMetric('52W Low', metrics.fifty_two_week_low ? '$'+metrics.fifty_two_week_low.toFixed(2) : null)}
+      </div>
+    </div>
+
+    <div class="tab-pane" id="news-${ticker}">
+      ${news.length ? news.map(renderNewsItem).join('') : '<p style="color:var(--muted);font-size:13px">No news available.</p>'}
+    </div>
+  `;
+  return el;
+}
+
+function renderBullets(label, items, cls) {
+  if (!items.length) return '';
+  return `<p class="section-label">${label}</p>
+  <ul class="bullet-list">${items.map(i => `<li class="${cls}">${i}</li>`).join('')}</ul>`;
+}
+
+function renderMetric(label, val) {
+  const display = (val === null || val === undefined) ? '—' : val;
+  return `<div class="metric-item"><div class="m-label">${label}</div><div class="m-val">${display}</div></div>`;
+}
+
+function renderNewsItem(a) {
+  const sentClass = a.sentiment_label === 'positive' ? 'sent-positive'
+                  : a.sentiment_label === 'negative' ? 'sent-negative'
+                  : 'sent-neutral';
+  const date = a.published_at ? new Date(a.published_at).toLocaleDateString() : '';
+  return `<div class="news-item">
+    <a class="news-title" href="${a.url || '#'}" target="_blank" rel="noopener">${a.title}</a>
+    <div class="news-meta">
+      ${a.source ? `<span class="news-source">${a.source}</span>` : ''}
+      ${date ? `<span class="news-source">${date}</span>` : ''}
+      ${a.sentiment_label ? `<span class="sent-pill ${sentClass}">${a.sentiment_label}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+function pct(v) { return (v !== null && v !== undefined) ? (v * 100).toFixed(1) + '%' : null; }
+
+function switchTab(btn, paneId) {
+  const card = btn.closest('.ticker-card');
+  card.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  card.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(paneId).classList.add('active');
+}
+
+function showLoader() { loader.style.display = 'block'; resultsDiv.style.display = 'none'; }
+function hideLoader() { loader.style.display = 'none'; }
+function showError(msg) { errorBox.textContent = '⚠ ' + msg; errorBox.style.display = 'block'; }
+function hideError() { errorBox.style.display = 'none'; }
+</script>
+</body>
+</html>
