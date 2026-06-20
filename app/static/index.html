@@ -229,6 +229,88 @@
     .sent-neutral  { background: #1c2333; color: var(--muted); }
     .sent-negative { background: #450a0a; color: var(--red); }
 
+    /* ── Pipeline progress panel ── */
+    #pipeline {
+      display: none;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 32px;
+      margin-bottom: 32px;
+    }
+    .pipeline-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .pipeline-header h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .pipeline-header p {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .pipeline-spinner {
+      width: 28px; height: 28px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    .pipeline-spinner.done { animation: none; border-color: var(--green); border-top-color: var(--green); }
+    .step-list { display: flex; flex-direction: column; gap: 8px; }
+    .step-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: var(--card2);
+      border: 1px solid transparent;
+      transition: border-color 0.2s;
+    }
+    .step-row.step-running { border-color: var(--accent); }
+    .step-row.step-pass    { border-color: #166534; }
+    .step-row.step-fail    { border-color: #7f1d1d; }
+    .step-icon {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .icon-pending  { background: var(--border); color: var(--muted); }
+    .icon-running  {
+      background: var(--accent);
+      width: 22px; height: 22px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent2);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    .icon-pass     { background: #14532d; color: var(--green); }
+    .icon-fail     { background: #450a0a; color: var(--red); }
+    .step-body { flex: 1; min-width: 0; }
+    .step-name { font-size: 13px; font-weight: 600; color: var(--text); }
+    .step-detail { font-size: 11px; color: var(--muted); margin-top: 2px; word-break: break-word; }
+    .step-badge {
+      font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 4px;
+      flex-shrink: 0; align-self: center;
+      letter-spacing: 0.5px;
+    }
+    .badge-pending { background: var(--card); color: var(--muted); border: 1px solid var(--border); }
+    .badge-running { background: #1e1b4b; color: var(--accent2); }
+    .badge-pass    { background: #14532d; color: var(--green); }
+    .badge-fail    { background: #450a0a; color: var(--red); }
+
     /* ── Footer ── */
     footer {
       text-align: center;
@@ -271,10 +353,16 @@
   <!-- Error -->
   <div id="error-box"></div>
 
-  <!-- Loader -->
-  <div id="loader">
-    <div class="spinner"></div>
-    <p id="loader-msg">Fetching financial data and news…</p>
+  <!-- Pipeline progress -->
+  <div id="pipeline">
+    <div class="pipeline-header">
+      <div class="pipeline-spinner" id="pipeline-spinner"></div>
+      <div>
+        <h2 id="pipeline-title">Running Analysis Pipeline…</h2>
+        <p id="pipeline-sub">Tracking each step in real time</p>
+      </div>
+    </div>
+    <div class="step-list" id="step-list"></div>
   </div>
 
   <!-- Results -->
@@ -291,56 +379,157 @@
 
 <script>
 const btn = document.getElementById('btn');
-const loader = document.getElementById('loader');
-const loaderMsg = document.getElementById('loader-msg');
 const errorBox = document.getElementById('error-box');
 const resultsDiv = document.getElementById('results');
 const cardsDiv = document.getElementById('cards');
-
-const LOADER_MSGS = [
-  'Fetching financial data and news…',
-  'Scoring news sentiment with Claude AI…',
-  'Computing valuation metrics…',
-  'Generating trading recommendations…',
-  'Building your dashboard…',
-];
+const pipelineDiv = document.getElementById('pipeline');
+const stepList = document.getElementById('step-list');
+const pipelineTitle = document.getElementById('pipeline-title');
+const pipelineSub = document.getElementById('pipeline-sub');
+const pipelineSpinner = document.getElementById('pipeline-spinner');
 
 btn.addEventListener('click', runAnalysis);
 document.addEventListener('keydown', e => { if (e.key === 'Enter') runAnalysis(); });
 
+// ── Pipeline step tracking ────────────────────────────────────────────────
+
+function showPipeline() {
+  pipelineDiv.style.display = 'block';
+  pipelineTitle.textContent = 'Running Analysis Pipeline…';
+  pipelineSub.textContent = 'Tracking each step in real time';
+  pipelineSpinner.className = 'pipeline-spinner';
+  stepList.innerHTML = '';
+  resultsDiv.style.display = 'none';
+}
+
+function hidePipeline() { pipelineDiv.style.display = 'none'; }
+
+function addStep(name) {
+  const row = document.createElement('div');
+  row.className = 'step-row step-running';
+  row.id = 'step-' + name.replace(/\W+/g, '-');
+
+  const icon = document.createElement('div');
+  icon.className = 'icon-running';
+
+  const body = document.createElement('div');
+  body.className = 'step-body';
+  const nameEl = document.createElement('div');
+  nameEl.className = 'step-name';
+  nameEl.textContent = name;
+  const detailEl = document.createElement('div');
+  detailEl.className = 'step-detail';
+  detailEl.textContent = 'In progress…';
+  body.appendChild(nameEl);
+  body.appendChild(detailEl);
+
+  const badge = document.createElement('span');
+  badge.className = 'step-badge badge-running';
+  badge.textContent = 'RUNNING';
+
+  row.appendChild(icon);
+  row.appendChild(body);
+  row.appendChild(badge);
+  stepList.appendChild(row);
+  return row;
+}
+
+function resolveStep(name, status, detail) {
+  // Find by partial key match since IDs are sanitized
+  const id = 'step-' + name.replace(/\W+/g, '-');
+  let row = document.getElementById(id);
+  if (!row) {
+    // Step wasn't pre-created (e.g. arrived fresh from SSE); create it
+    row = addStep(name);
+  }
+  const icon = row.querySelector('div');
+  const detailEl = row.querySelector('.step-detail');
+  const badge = row.querySelector('.step-badge');
+
+  row.className = 'step-row step-' + status;
+  icon.className = status === 'pass' ? 'step-icon icon-pass' : 'step-icon icon-fail';
+  icon.textContent = status === 'pass' ? '✓' : '✗';
+  detailEl.textContent = detail || '';
+  badge.className = 'step-badge badge-' + status;
+  badge.textContent = status === 'pass' ? 'PASSED' : 'FAILED';
+
+  // Scroll new step into view
+  row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ── Main analysis function (uses SSE) ─────────────────────────────────────
+
 async function runAnalysis() {
-  const t1 = document.getElementById('t1').value.trim().toUpperCase();
-  const t2 = document.getElementById('t2').value.trim().toUpperCase();
+  const t1 = document.getElementById('t1').value.trim();
+  const t2 = document.getElementById('t2').value.trim();
   const tickers = [t1, t2].filter(Boolean);
 
-  if (!tickers.length) { showError('Please enter at least one ticker symbol.'); return; }
+  if (!tickers.length) { showError('Please enter at least one stock name or ticker symbol.'); return; }
 
   hideError();
-  showLoader();
+  showPipeline();
   btn.disabled = true;
 
-  // Cycle loader messages
-  let mi = 0;
-  const msgInterval = setInterval(() => {
-    mi = (mi + 1) % LOADER_MSGS.length;
-    loaderMsg.textContent = LOADER_MSGS[mi];
-  }, 3000);
+  return new Promise((resolve) => {
+    const es = new EventSource('/dashboard/analyze/stream?' + new URLSearchParams({
+      tickers: JSON.stringify(tickers)
+    }));
 
-  try {
-    const res = await fetch('/dashboard/analyze', {
+    // POST via fetch-then-SSE isn't native; use fetch + ReadableStream instead
+    es.close();
+
+    // Use fetch + manual SSE parsing (POST body required)
+    fetch('/dashboard/analyze/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tickers }),
+    }).then(res => {
+      if (!res.ok) return res.json().then(d => { throw new Error(d.detail || 'Analysis failed'); });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      function pump() {
+        return reader.read().then(({ done, value }) => {
+          if (done) {
+            pipelineTitle.textContent = 'Analysis Complete';
+            pipelineSub.textContent = 'All pipeline steps finished';
+            pipelineSpinner.className = 'pipeline-spinner done';
+            btn.disabled = false;
+            resolve();
+            return;
+          }
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop(); // keep incomplete last line
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const event = JSON.parse(line.slice(6));
+              handleEvent(event);
+            } catch (_) {}
+          }
+          return pump();
+        });
+      }
+      return pump();
+    }).catch(err => {
+      showError(err.message);
+      hidePipeline();
+      btn.disabled = false;
+      resolve();
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Analysis failed');
-    renderResults(data);
-  } catch (e) {
-    showError(e.message);
-  } finally {
-    clearInterval(msgInterval);
-    hideLoader();
-    btn.disabled = false;
+  });
+}
+
+function handleEvent(event) {
+  if (event.type === 'step') {
+    resolveStep(event.step, event.status, event.detail);
+  } else if (event.type === 'result') {
+    renderResults(event.data);
+  } else if (event.type === 'error') {
+    showError(event.message);
+    hidePipeline();
   }
 }
 
@@ -522,8 +711,6 @@ function switchTab(btn, paneId) {
   document.getElementById(paneId).classList.add('active');
 }
 
-function showLoader() { loader.style.display = 'block'; resultsDiv.style.display = 'none'; }
-function hideLoader() { loader.style.display = 'none'; }
 function showError(msg) { errorBox.textContent = '⚠ ' + msg; errorBox.style.display = 'block'; }
 function hideError() { errorBox.style.display = 'none'; }
 </script>
