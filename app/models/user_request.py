@@ -16,7 +16,7 @@ class UserRequest(BaseModel):
         cleaned = []
         for t in v:
             t = t.strip().upper()
-            if not t.isalpha() or len(t) > 5:
+            if not t.isalpha() or len(t) > 10:
                 raise ValueError(f"Invalid ticker: {t}")
             cleaned.append(t)
         return cleaned

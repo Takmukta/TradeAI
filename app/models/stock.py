@@ -13,6 +13,6 @@ class Stock(BaseModel):
     @classmethod
     def ticker_must_be_valid(cls, v: str) -> str:
         v = v.strip().upper()
-        if not v.isalpha() or len(v) > 5:
+        if not v.isalpha() or len(v) > 10:
             raise ValueError(f"Invalid ticker symbol: {v}")
         return v
