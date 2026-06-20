@@ -394,7 +394,7 @@ function buildCard(ticker, rec, metrics, stock, news) {
     </div>
 
     <div class="tab-pane active" id="analysis-${ticker}">
-      <p class="rationale">${rec.rationale || 'No rationale available.'}</p>
+      <p class="rationale">${esc(rec.rationale || 'No rationale available.')}</p>
       ${renderBullets('Risks', rec.risks || [], 'risk-item')}
       ${renderBullets('Upsides', rec.upsides || [], 'up-item')}
     </div>
@@ -423,15 +423,20 @@ function buildCard(ticker, rec, metrics, stock, news) {
   return el;
 }
 
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function renderBullets(label, items, cls) {
   if (!items.length) return '';
   return `<p class="section-label">${label}</p>
-  <ul class="bullet-list">${items.map(i => `<li class="${cls}">${i}</li>`).join('')}</ul>`;
+  <ul class="bullet-list">${items.map(i => `<li class="${cls}">${esc(i)}</li>`).join('')}</ul>`;
 }
 
 function renderMetric(label, val) {
   const display = (val === null || val === undefined) ? '—' : val;
-  return `<div class="metric-item"><div class="m-label">${label}</div><div class="m-val">${display}</div></div>`;
+  return `<div class="metric-item"><div class="m-label">${label}</div><div class="m-val">${esc(display)}</div></div>`;
 }
 
 function renderNewsItem(a) {
@@ -440,7 +445,7 @@ function renderNewsItem(a) {
                   : 'sent-neutral';
   const date = a.published_at ? new Date(a.published_at).toLocaleDateString() : '';
   return `<div class="news-item">
-    <a class="news-title" href="${a.url || '#'}" target="_blank" rel="noopener">${a.title}</a>
+    <a class="news-title" href="${a.url || '#'}" target="_blank" rel="noopener">${esc(a.title)}</a>
     <div class="news-meta">
       ${a.source ? `<span class="news-source">${a.source}</span>` : ''}
       ${date ? `<span class="news-source">${date}</span>` : ''}
