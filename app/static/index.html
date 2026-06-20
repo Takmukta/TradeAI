@@ -367,92 +367,150 @@ function buildCard(ticker, rec, metrics, stock, news) {
   const recommendation = rec.recommendation || '—';
   const recClass = ['BUY','HOLD','SELL'].includes(recommendation) ? recommendation : 'HOLD';
 
+  // Build static skeleton — no user/LLM content in innerHTML
   el.innerHTML = `
     <div class="ticker-header">
       <div class="ticker-name">
-        <h3>${ticker}</h3>
-        <p>${stock.company_name || ''} ${stock.current_price ? '· $' + stock.current_price.toFixed(2) : ''}</p>
+        <h3></h3>
+        <p></p>
       </div>
-      <span class="rec-badge rec-${recClass}">${recommendation}</span>
+      <span class="rec-badge rec-${recClass}"></span>
     </div>
-
     <div class="score-section">
-      <div class="score-label"><span>Valuation Score</span><span>${rec.valuation_score ?? '—'}/100</span></div>
-      <div class="score-bar-track"><div class="score-bar-fill score-val" style="width:${rec.valuation_score ?? 0}%"></div></div>
-
-      <div class="score-label"><span>Sentiment Score</span><span>${rec.sentiment_score ?? '—'}/100</span></div>
-      <div class="score-bar-track"><div class="score-bar-fill score-sent" style="width:${rec.sentiment_score ?? 0}%"></div></div>
-
-      <div class="score-label"><span>Final Score</span><span>${rec.final_score ?? '—'}/100</span></div>
-      <div class="score-bar-track"><div class="score-bar-fill score-final" style="width:${rec.final_score ?? 0}%"></div></div>
+      <div class="score-label"><span>Valuation Score</span><span class="vs-val">—/100</span></div>
+      <div class="score-bar-track"><div class="score-bar-fill score-val" style="width:0%"></div></div>
+      <div class="score-label"><span>Sentiment Score</span><span class="ss-val">—/100</span></div>
+      <div class="score-bar-track"><div class="score-bar-fill score-sent" style="width:0%"></div></div>
+      <div class="score-label"><span>Final Score</span><span class="fs-val">—/100</span></div>
+      <div class="score-bar-track"><div class="score-bar-fill score-final" style="width:0%"></div></div>
     </div>
-
     <div class="tabs">
       <button class="tab-btn active" onclick="switchTab(this,'analysis-${ticker}')">Analysis</button>
       <button class="tab-btn" onclick="switchTab(this,'metrics-${ticker}')">Metrics</button>
       <button class="tab-btn" onclick="switchTab(this,'news-${ticker}')">News (${news.length})</button>
     </div>
-
-    <div class="tab-pane active" id="analysis-${ticker}">
-      <p class="rationale">${esc(rec.rationale || 'No rationale available.')}</p>
-      ${renderBullets('Risks', rec.risks || [], 'risk-item')}
-      ${renderBullets('Upsides', rec.upsides || [], 'up-item')}
-    </div>
-
-    <div class="tab-pane" id="metrics-${ticker}">
-      <div class="metrics-grid">
-        ${renderMetric('P/E Ratio', metrics.pe_ratio)}
-        ${renderMetric('P/B Ratio', metrics.pb_ratio)}
-        ${renderMetric('EPS', metrics.eps)}
-        ${renderMetric('ROE', pct(metrics.roe))}
-        ${renderMetric('Profit Margin', pct(metrics.profit_margin))}
-        ${renderMetric('Revenue Growth', pct(metrics.revenue_growth))}
-        ${renderMetric('Debt / Equity', metrics.debt_to_equity)}
-        ${renderMetric('Current Ratio', metrics.current_ratio)}
-        ${renderMetric('Beta', metrics.beta)}
-        ${renderMetric('Dividend Yield', pct(metrics.dividend_yield))}
-        ${renderMetric('52W High', metrics.fifty_two_week_high ? '$'+metrics.fifty_two_week_high.toFixed(2) : null)}
-        ${renderMetric('52W Low', metrics.fifty_two_week_low ? '$'+metrics.fifty_two_week_low.toFixed(2) : null)}
-      </div>
-    </div>
-
-    <div class="tab-pane" id="news-${ticker}">
-      ${news.length ? news.map(renderNewsItem).join('') : '<p style="color:var(--muted);font-size:13px">No news available.</p>'}
-    </div>
+    <div class="tab-pane active" id="analysis-${ticker}"></div>
+    <div class="tab-pane" id="metrics-${ticker}"><div class="metrics-grid"></div></div>
+    <div class="tab-pane" id="news-${ticker}"></div>
   `;
+
+  // Fill header with textContent (safe from injection)
+  el.querySelector('.ticker-name h3').textContent = ticker;
+  const subText = [stock.company_name, stock.current_price ? '· $' + stock.current_price.toFixed(2) : ''].filter(Boolean).join(' ');
+  el.querySelector('.ticker-name p').textContent = subText;
+  el.querySelector('.rec-badge').textContent = recommendation;
+
+  // Fill score bars
+  if (rec.valuation_score != null) {
+    el.querySelector('.vs-val').textContent = rec.valuation_score + '/100';
+    el.querySelector('.score-val').style.width = rec.valuation_score + '%';
+  }
+  if (rec.sentiment_score != null) {
+    el.querySelector('.ss-val').textContent = rec.sentiment_score + '/100';
+    el.querySelector('.score-sent').style.width = rec.sentiment_score + '%';
+  }
+  if (rec.final_score != null) {
+    el.querySelector('.fs-val').textContent = rec.final_score + '/100';
+    el.querySelector('.score-final').style.width = rec.final_score + '%';
+  }
+
+  // Fill analysis pane with DOM nodes (safe textContent for LLM text)
+  const analysisPane = el.querySelector('#analysis-' + ticker);
+  const ratP = document.createElement('p');
+  ratP.className = 'rationale';
+  ratP.textContent = rec.rationale || 'No rationale available.';
+  analysisPane.appendChild(ratP);
+  appendBullets(analysisPane, 'Risks', rec.risks || [], 'risk-item');
+  appendBullets(analysisPane, 'Upsides', rec.upsides || [], 'up-item');
+
+  // Fill metrics grid with DOM nodes — completely isolated from LLM HTML
+  const grid = el.querySelector('#metrics-' + ticker + ' .metrics-grid');
+  const metricDefs = [
+    ['P/E Ratio',       fmt(metrics.pe_ratio)],
+    ['P/B Ratio',       fmt(metrics.pb_ratio)],
+    ['EPS',             fmt(metrics.eps)],
+    ['ROE',             pct(metrics.roe)],
+    ['Profit Margin',   pct(metrics.profit_margin)],
+    ['Revenue Growth',  pct(metrics.revenue_growth)],
+    ['Debt / Equity',   fmt(metrics.debt_to_equity)],
+    ['Current Ratio',   fmt(metrics.current_ratio)],
+    ['Beta',            fmt(metrics.beta)],
+    ['Dividend Yield',  pct(metrics.dividend_yield)],
+    ['52W High',        metrics.fifty_two_week_high != null ? '$' + metrics.fifty_two_week_high.toFixed(2) : null],
+    ['52W Low',         metrics.fifty_two_week_low  != null ? '$' + metrics.fifty_two_week_low.toFixed(2)  : null],
+  ];
+  metricDefs.forEach(([label, val]) => {
+    const item = document.createElement('div');
+    item.className = 'metric-item';
+    const lbl = document.createElement('div');
+    lbl.className = 'm-label';
+    lbl.textContent = label;
+    const vEl = document.createElement('div');
+    vEl.className = 'm-val';
+    vEl.textContent = (val === null || val === undefined) ? '—' : val;
+    item.appendChild(lbl);
+    item.appendChild(vEl);
+    grid.appendChild(item);
+  });
+
+  // Fill news pane
+  const newsPane = el.querySelector('#news-' + ticker);
+  if (news.length) {
+    news.forEach(a => newsPane.appendChild(buildNewsItem(a)));
+  } else {
+    const p = document.createElement('p');
+    p.style.cssText = 'color:var(--muted);font-size:13px';
+    p.textContent = 'No news available.';
+    newsPane.appendChild(p);
+  }
+
   return el;
 }
 
-function esc(s) {
-  if (s === null || s === undefined) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function fmt(v) {
+  if (v === null || v === undefined) return null;
+  return typeof v === 'number' ? parseFloat(v.toFixed(4)).toString() : String(v);
 }
 
-function renderBullets(label, items, cls) {
-  if (!items.length) return '';
-  return `<p class="section-label">${label}</p>
-  <ul class="bullet-list">${items.map(i => `<li class="${cls}">${esc(i)}</li>`).join('')}</ul>`;
+function appendBullets(parent, label, items, cls) {
+  if (!items.length) return;
+  const lbl = document.createElement('p');
+  lbl.className = 'section-label';
+  lbl.textContent = label;
+  parent.appendChild(lbl);
+  const ul = document.createElement('ul');
+  ul.className = 'bullet-list';
+  items.forEach(i => {
+    const li = document.createElement('li');
+    li.className = cls;
+    li.textContent = i;
+    ul.appendChild(li);
+  });
+  parent.appendChild(ul);
 }
 
-function renderMetric(label, val) {
-  const display = (val === null || val === undefined) ? '—' : val;
-  return `<div class="metric-item"><div class="m-label">${label}</div><div class="m-val">${esc(display)}</div></div>`;
-}
-
-function renderNewsItem(a) {
+function buildNewsItem(a) {
   const sentClass = a.sentiment_label === 'positive' ? 'sent-positive'
-                  : a.sentiment_label === 'negative' ? 'sent-negative'
-                  : 'sent-neutral';
+                  : a.sentiment_label === 'negative' ? 'sent-negative' : 'sent-neutral';
   const date = a.published_at ? new Date(a.published_at).toLocaleDateString() : '';
-  return `<div class="news-item">
-    <a class="news-title" href="${a.url || '#'}" target="_blank" rel="noopener">${esc(a.title)}</a>
-    <div class="news-meta">
-      ${a.source ? `<span class="news-source">${a.source}</span>` : ''}
-      ${date ? `<span class="news-source">${date}</span>` : ''}
-      ${a.sentiment_label ? `<span class="sent-pill ${sentClass}">${a.sentiment_label}</span>` : ''}
-    </div>
-  </div>`;
+  const wrap = document.createElement('div');
+  wrap.className = 'news-item';
+  const link = document.createElement('a');
+  link.className = 'news-title';
+  link.href = a.url || '#';
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.textContent = a.title;
+  wrap.appendChild(link);
+  const meta = document.createElement('div');
+  meta.className = 'news-meta';
+  if (a.source) { const s = document.createElement('span'); s.className = 'news-source'; s.textContent = a.source; meta.appendChild(s); }
+  if (date)     { const s = document.createElement('span'); s.className = 'news-source'; s.textContent = date; meta.appendChild(s); }
+  if (a.sentiment_label) { const s = document.createElement('span'); s.className = 'sent-pill ' + sentClass; s.textContent = a.sentiment_label; meta.appendChild(s); }
+  wrap.appendChild(meta);
+  return wrap;
 }
+
 
 function pct(v) { return (v !== null && v !== undefined) ? (v * 100).toFixed(1) + '%' : null; }
 
